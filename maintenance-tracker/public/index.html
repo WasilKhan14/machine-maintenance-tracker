@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maintenance Tracker</title>
+<style>
+:root{--bg:#eef2f7;--card:#fff;--text:#0f172a;--muted:#64748b;--pri:#0369a1;--acc:#f59e0b;--line:#e2e8f0;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626}
+[data-theme=dark]{--bg:#0b1220;--card:#131c2e;--text:#e2e8f0;--muted:#94a3b8;--line:#23304a;--pri:#38bdf8}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#0f172a;color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:5;border-bottom:3px solid var(--acc)}
+.logo{font-weight:700;font-size:18px}nav{display:flex;flex-wrap:wrap}nav button{background:none;border:0;color:#cbd5e1;padding:8px 12px;cursor:pointer;font-size:15px;border-bottom:2px solid transparent}nav button.on{color:#fff;border-color:var(--acc)}
+main{max-width:1050px;margin:18px auto;padding:0 14px}.card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:14px;border:1px solid var(--line);box-shadow:0 1px 3px #0000000d}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:14px}.stat{text-align:center;margin:0}.stat b{font-size:26px;display:block;color:var(--pri)}.stat small{color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+input,select,textarea{padding:9px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--card);color:var(--text);margin:3px 0}textarea{width:100%;resize:vertical}
+.f{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}.f input,.f select{width:100%}.bar-f{display:flex;gap:8px;flex-wrap:wrap}.bar-f input,.bar-f select{flex:1 1 140px}
+button.b{background:var(--pri);color:#fff;border:0;padding:8px 13px;border-radius:8px;cursor:pointer;font:inherit;margin:2px 3px 2px 0}button.b:hover{filter:brightness(1.1)}
+button.g{background:var(--ok)}button.r{background:var(--bad)}button.y{background:#d97706}button.o{background:transparent;color:var(--pri);border:1px solid var(--pri)}button.w{background:#fff;color:#0f172a}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}th{color:var(--muted);font-weight:600}.wrap{overflow-x:auto}
+.tag{padding:2px 9px;border-radius:99px;color:#fff;font-size:12px;white-space:nowrap;display:inline-block}
+.Overdue,.Breakdown,.Critical,.Open{background:var(--bad)}.Due,.Maintenance,.High{background:#ea580c}.OK,.Operational,.Resolved,.Low{background:var(--ok)}.Medium{background:#ca8a04}.Retired,.NA{background:#64748b}
+.muted{color:var(--muted);font-size:14px}.err{color:var(--bad)}h3{margin:0 0 8px}h2{margin:4px 0 12px}
+.seg{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:6px 0}.seg i{display:block}
+.bar{height:18px;border-radius:4px;color:#fff;font-size:12px;padding-left:6px;min-width:20px;margin:3px 0;background:var(--pri);white-space:nowrap}
+.legend span{margin-right:12px;font-size:13px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px}
+#modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:14px;z-index:20}#modal.show{display:flex}#mbox{background:var(--card);border-radius:14px;max-width:680px;width:100%;max-height:90vh;overflow:auto;padding:20px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:99px;display:none;z-index:30}
+.login{max-width:380px;margin:40px auto}.login input{width:100%}.row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+.tl{border-left:3px solid var(--line);padding-left:12px;margin:8px 0 8px 4px}
+@media print{header,.noprint,button,footer{display:none!important}body{background:#fff;color:#000}.card{box-shadow:none;border:1px solid #ccc}}
+
+.thumb{width:44px;height:44px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px;float:left}
+.big{max-width:100%;max-height:220px;border-radius:8px;margin:6px 0;display:block}
+</style></head><body>
+<header><span class="logo">Machine Maintenance Tracker</span><nav id="nav"></nav><span id="auth"></span></header>
+<main id="view"></main>
+<div id="modal" onclick="if(event.target.id=='modal')closeM()"><div id="mbox"></div></div><div id="toast"></div>
+<script>
+let token=localStorage.t||'',user=JSON.parse(localStorage.u||'null'),tab='Dashboard',mf={q:'',type:'',status:'',service:''},bf='',cache={machines:[],parts:[]};
+const $=id=>document.getElementById(id),val=id=>$(id).value,esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+if(localStorage.theme)document.documentElement.dataset.theme=localStorage.theme;
+function toggleTheme(){const d=document.documentElement.dataset.theme=='dark'?'light':'dark';document.documentElement.dataset.theme=d;localStorage.theme=d}
+function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',2600)}
+async function api(url,method='GET',body){const r=await fetch(url,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:body?JSON.stringify(body):undefined});
+ const d=await r.json();if(!r.ok){if(r.status===401&&token)logout(true);throw new Error(d.error)}return d}
+async function act(f,msg,after){try{await f();toast(msg||'Done');after?after():render()}catch(x){toast(x.message)}}
+const tagc=s=>String(s).replace('Due soon','Due').replace('Under Maintenance','Maintenance').replace('N/A','NA');
+const tag=s=>`<span class="tag ${tagc(s)}">${esc(s)}</span>`;
+const inr=n=>'₹'+Math.round(n||0).toLocaleString('en-IN');
+async function login(){try{const d=await api('/api/login','POST',{email:val('e'),password:val('p')});token=d.token;user=d;localStorage.t=token;localStorage.u=JSON.stringify(d);tab='Dashboard';start();toast('Welcome '+d.name)}catch(x){$('msg').style.color='#dc2626';$('msg').textContent=x.message}}
+async function reg(){try{await api('/api/register','POST',{name:val('n'),email:val('e'),password:val('p')});$('msg').style.color='#16a34a';$('msg').textContent='Registered! Now click Login.'}catch(x){$('msg').style.color='#dc2626';$('msg').textContent=x.message}}
+function logout(silent){localStorage.removeItem('t');localStorage.removeItem('u');token='';user=null;start();if(!silent)toast('Logged out')}
+function go(t){tab=t;start()}
+function openM(h){$('mbox').innerHTML=h;$('modal').classList.add('show')}function closeM(){$('modal').classList.remove('show')}
+function start(){if(!user){$('nav').innerHTML='';$('auth').innerHTML='';return $('view').innerHTML=`<div class="card login"><h2>Maintenance Tracker</h2><input id="n" placeholder="Name (register only)"><input id="e" placeholder="Email"><input id="p" type="password" placeholder="Password (6+ chars)">
+ <button class="b" onclick="login()">Login</button><button class="b g" onclick="reg()">Register</button><p id="msg"></p><div class="muted">Demo logins:<br>Admin: admin@demo.com / admin123<br>Technician: tech@demo.com / tech123</div></div>`}
+ const t=['Dashboard','Machines','Breakdowns','Parts','Reports'];if(user.role=='admin')t.push('Team');
+ $('nav').innerHTML=t.map(x=>`<button class="${x==tab?'on':''}" onclick="go('${x}')">${x}</button>`).join('');
+ $('auth').innerHTML=`<button class="b w" onclick="toggleTheme()">Theme</button> ${esc(user.name)} (${user.role}) <button class="b r" onclick="logout()">Logout</button>`;render()}
+async function render(){const v=$('view');if(!user)return;try{
+ if(tab=='Dashboard'){const d=await api('/api/dashboard'),mx=Math.max(1,...d.monthly.map(m=>m.breakdown_cost+m.service_cost)),tm=Math.max(1,...d.top_downtime.map(x=>x.hours)),col={Operational:'#16a34a','Under Maintenance':'#ca8a04',Breakdown:'#dc2626',Retired:'#64748b'};
+  v.innerHTML=`<div class="grid">${[['Active machines',d.machines],['Availability',d.availability+'%'],['Open breakdowns',d.open_breakdowns],['Service overdue',d.overdue],['Due in 7 days',d.due_soon],['Avg repair time',d.mttr+' h'],['Total downtime',d.total_downtime+' h'],['Total cost',inr(d.total_cost)]].map(s=>`<div class="card stat"><small>${s[0]}</small><b>${s[1]}</b></div>`).join('')}</div>
+  <div class="card"><h3>Machine status</h3><div class="seg">${d.by_status.filter(s=>s.count).map(s=>`<i style="flex:${s.count};background:${col[s.status]}" title="${s.status}: ${s.count}"></i>`).join('')}</div><div class="legend">${d.by_status.map(s=>`<span><i class="dot" style="background:${col[s.status]}"></i>${s.status}: <b>${s.count}</b></span>`).join('')}</div></div>
+  <div class="two"><div class="card"><h3>Service alerts</h3>${d.alerts.length?d.alerts.map(m=>`<p>${tag(m.service)} <b>${esc(m.name)}</b><br><span class="muted">next service ${m.next_service} (${m.days_left<0?-m.days_left+' days late':m.days_left+' days left'})</span></p>`).join(''):'<span class="muted">All machines are on schedule.</span>'}</div>
+  <div class="card"><h3>Low stock parts</h3>${d.low_stock.length?d.low_stock.map(p=>`<p class="err">${esc(p.name)}: ${p.qty} left <span class="muted">(min ${p.min_qty})</span></p>`).join(''):'<span class="muted">Stock is fine.</span>'}</div></div>
+  <div class="two"><div class="card"><h3>Monthly maintenance cost</h3>${d.monthly.map(m=>`<div class="muted">${m.month} | ${m.breakdowns} breakdown${m.breakdowns==1?'':'s'}</div><div class="bar" style="width:${Math.max(6,(m.breakdown_cost+m.service_cost)/mx*100)}%">${inr(m.breakdown_cost+m.service_cost)}</div>`).join('')}<p class="muted">Repairs ${inr(d.breakdown_cost)} + Services ${inr(d.service_cost)}</p></div>
+  <div class="card"><h3>Most downtime (top 5)</h3>${d.top_downtime.map(x=>`<div class="muted">${esc(x.name)} | ${x.breakdowns} breakdown${x.breakdowns==1?'':'s'}</div><div class="bar" style="width:${Math.max(6,x.hours/tm*100)}%;background:var(--bad)">${x.hours} h</div>`).join('')||'<span class="muted">No data</span>'}</div></div>`;
+  if(user.role=='admin'){const a=await api('/api/activity');v.innerHTML+=`<div class="card"><h3>Recent activity</h3>${a.map(x=>`<div class="muted">${x.at} | <b>${esc(x.user)}</b>: ${esc(x.action)}</div>`).join('')||'<span class="muted">Nothing yet</span>'}</div>`}}
+ if(tab=='Machines'){const p=new URLSearchParams({q:mf.q,type:mf.type,status:mf.status});let ms=await api('/api/machines?'+p);cache.machines=ms;if(mf.service)ms=ms.filter(m=>m.service==mf.service);
+  const types=[...new Set(cache.machines.map(m=>m.type))];
+  v.innerHTML=`<div class="card"><div class="bar-f"><input id="fq" placeholder="Search name / serial / location" value="${esc(mf.q)}"><select id="ft"><option value="">All types</option>${['Crane','Generator','Motor','Gearbox','Pump','Compressor','Other'].map(x=>`<option ${mf.type==x?'selected':''}>${x}</option>`).join('')}</select>
+  <select id="fs"><option value="">Any status</option>${['Operational','Under Maintenance','Breakdown','Retired'].map(x=>`<option ${mf.status==x?'selected':''}>${x}</option>`).join('')}</select>
+  <select id="fv"><option value="">Any service state</option>${['OK','Due soon','Overdue'].map(x=>`<option ${mf.service==x?'selected':''}>${x}</option>`).join('')}</select>
+  <button class="b" onclick="mf={q:val('fq'),type:val('ft'),status:val('fs'),service:val('fv')};render()">Filter</button><button class="b g" onclick="machineForm()">+ Add machine</button></div></div>
+  <div class="card wrap"><table><tr><th>Machine</th><th>Status</th><th>Hours</th><th>Last service</th><th>Next service</th><th>Service</th><th></th></tr>
+  ${ms.map(m=>`<tr><td>${m.image?`<img class="thumb" src="${m.image}">`:''}<b>${esc(m.name)}</b><div class="muted">${esc(m.type)} | ${esc(m.location)}${m.serial_no?' | '+esc(m.serial_no):''}</div></td><td>${tag(m.status)}</td><td>${m.hours_run}</td><td>${m.last_service||'-'}</td><td>${m.next_service}</td><td>${tag(m.service)}</td>
+  <td><button class="b o" onclick="detail(${m.id})">Details</button>${m.status!='Retired'?`<button class="b g" onclick="serviceForm(${m.id})">Log service</button>`:''}<button class="b o" onclick="machineForm(${m.id})">Edit</button>${user.role=='admin'?`<button class="b r" onclick="if(confirm('Delete machine and its history?'))act(()=>api('/api/machines/${m.id}','DELETE'),'Deleted')">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">No machines match.</td></tr>'}</table></div>`}
+ if(tab=='Breakdowns'){const [ms,bs]=await Promise.all([api('/api/machines'),api('/api/breakdowns?status='+bf)]);cache.machines=ms;const act_=ms.filter(m=>m.status!='Retired');
+  v.innerHTML=`<div class="card"><h3>Report breakdown</h3><div class="f"><select id="b1">${act_.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><input id="b2" placeholder="Issue *"><select id="b5">${['Low','Medium','High','Critical'].map(x=>`<option ${x=='Medium'?'selected':''}>${x}</option>`).join('')}</select><input id="b3" type="number" min="0" placeholder="Downtime so far (h)"><input id="b4" type="number" min="0" placeholder="Cost so far (₹)"></div>
+  <button class="b" onclick="act(()=>api('/api/breakdowns','POST',{machine_id:val('b1'),issue:val('b2'),severity:val('b5'),downtime_hours:val('b3'),cost:val('b4')}),'Breakdown reported')">Report</button></div>
+  <div class="tabs">${[['','All'],['Open','Open'],['Resolved','Resolved']].map(x=>`<button class="b ${bf==x[0]?'':'o'}" onclick="bf='${x[0]}';render()">${x[1]}</button>`).join('')}</div>
+  <div class="card wrap"><table><tr><th>Date</th><th>Machine</th><th>Issue</th><th>Severity</th><th>Status</th><th>Downtime</th><th>Cost</th><th></th></tr>
+  ${bs.map(b=>`<tr><td>${b.date}</td><td>${esc(b.machine)}</td><td>${esc(b.issue)}</td><td>${tag(b.severity)}</td><td>${tag(b.status)}</td><td>${b.downtime_hours}h</td><td>${inr(b.cost)}</td>
+  <td>${b.status=='Open'?`<button class="b g" onclick="resolveForm(${b.id},${b.downtime_hours},${b.cost})">Resolve</button>`:''}${user.role=='admin'?`<button class="b r" onclick="if(confirm('Delete record?'))act(()=>api('/api/breakdowns/${b.id}','DELETE'),'Deleted')">Del</button>`:''}</td></tr>`).join('')||'<tr><td colspan=8 class="muted">No records.</td></tr>'}</table></div>`}
+ if(tab=='Parts'){const ps=await api('/api/parts');cache.parts=ps;
+  v.innerHTML=`<div class="card"><h3>Add part</h3><div class="f"><input id="c1" placeholder="Part name *"><input id="c2" type="number" min="0" placeholder="Quantity *"><input id="c3" type="number" min="0" placeholder="Minimum stock *"><input id="c4" type="number" min="0" placeholder="Unit cost (₹)"></div>
+  <button class="b" onclick="act(()=>api('/api/parts','POST',{name:val('c1'),qty:val('c2'),min_qty:val('c3'),unit_cost:val('c4')}),'Part added')">Add</button></div>
+  <div class="card wrap"><table><tr><th>Part</th><th>Qty</th><th>Min</th><th>Unit cost</th><th>Stock value</th><th></th></tr>${ps.map(p=>`<tr><td>${esc(p.name)}</td><td class="${p.qty<=p.min_qty?'err':''}"><b>${p.qty}</b> ${p.qty<=p.min_qty?'(low)':''}</td><td>${p.min_qty}</td><td>${inr(p.unit_cost)}</td><td>${inr(p.qty*p.unit_cost)}</td>
+  <td><button class="b" onclick="act(()=>api('/api/parts/${p.id}','PUT',{delta:1}),'+1')">+</button><button class="b" onclick="act(()=>api('/api/parts/${p.id}','PUT',{delta:-1}),'-1')">-</button>${user.role=='admin'?`<button class="b r" onclick="if(confirm('Delete part?'))act(()=>api('/api/parts/${p.id}','DELETE'),'Deleted')">Del</button>`:''}</td></tr>`).join('')}</table></div>`}
+ if(tab=='Reports'){const d=await api('/api/dashboard');
+  v.innerHTML=`<div class="card"><div class="row"><h2>Maintenance report</h2><span class="noprint"><button class="b" onclick="window.print()">Print / Save as PDF</button></span></div><p class="muted">Generated on ${new Date().toISOString().slice(0,10)} by ${esc(user.name)}</p>
+  <table><tr><th>Active machines</th><td>${d.machines}</td><th>Availability</th><td>${d.availability}%</td></tr><tr><th>Breakdowns (all time)</th><td>${d.breakdowns}</td><th>Open now</th><td>${d.open_breakdowns}</td></tr>
+  <tr><th>Total downtime</th><td>${d.total_downtime} h</td><th>Avg repair time</th><td>${d.mttr} h</td></tr><tr><th>Repair cost</th><td>${inr(d.breakdown_cost)}</td><th>Service cost</th><td>${inr(d.service_cost)}</td></tr><tr><th>Service overdue</th><td>${d.overdue}</td><th>Due in 7 days</th><td>${d.due_soon}</td></tr></table>
+  <h3 style="margin-top:14px">Machines needing attention</h3>${d.alerts.map(m=>`<p>${tag(m.service)} ${esc(m.name)} - next service ${m.next_service}</p>`).join('')||'<span class="muted">None</span>'}
+  <h3 style="margin-top:14px">Low stock</h3>${d.low_stock.map(p=>`<p>${esc(p.name)}: ${p.qty} (min ${p.min_qty})</p>`).join('')||'<span class="muted">None</span>'}</div>
+  <div class="card noprint"><h3>Download data (CSV for Excel)</h3><button class="b g" onclick="exp('machines')">Machines</button><button class="b g" onclick="exp('breakdowns')">Breakdowns</button><button class="b g" onclick="exp('services')">Service history</button></div>`}
+ if(tab=='Team'){const us=await api('/api/users');
+  v.innerHTML=`<div class="card"><h3>Team members</h3><p class="muted">New registrations start as Technician. Admins can promote them.</p><table><tr><th>Name</th><th>Email</th><th>Role</th></tr>${us.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td><select onchange="act(()=>api('/api/users/${u.id}/role','PUT',{role:this.value}),'Role updated')"><option ${u.role=='technician'?'selected':''}>technician</option><option ${u.role=='admin'?'selected':''}>admin</option></select></td></tr>`).join('')}</table></div>`}
+}catch(x){toast(x.message)}}
+async function exp(w){try{const r=await fetch('/api/export/'+w,{headers:{Authorization:'Bearer '+token}});if(!r.ok)throw new Error('Export failed');const a=document.createElement('a');a.href=URL.createObjectURL(await r.blob());a.download=w+'.csv';a.click()}catch(x){toast(x.message)}}
+let curImg='';
+function pickImg(inp){const f=inp.files[0];if(!f)return;if(!f.type.startsWith('image/')){toast('Please choose an image file');inp.value='';return}
+ const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{const k=Math.min(1,640/Math.max(im.width,im.height)),c=document.createElement('canvas');
+  c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+  curImg=c.toDataURL('image/jpeg',0.75);const p=$('mprev');p.src=curImg;p.style.display='block'};im.onerror=()=>toast('Could not read this image');im.src=rd.result};rd.readAsDataURL(f)}
+function machineForm(id){const m=id?cache.machines.find(x=>x.id==id):{status:'Operational',interval_days:90,hours_run:0};curImg=m.image||'';
+ openM(`<div class="row"><h3>${id?'Edit':'Add'} machine</h3><button class="b o" onclick="closeM()">Close</button></div><div class="f"><input id="m1" placeholder="Name *" value="${esc(m.name)}"><select id="m2">${['Crane','Generator','Motor','Gearbox','Pump','Compressor','Other'].map(x=>`<option ${m.type==x?'selected':''}>${x}</option>`).join('')}</select>
+ <input id="m3" placeholder="Location" value="${esc(m.location)}"><input id="m4" placeholder="Serial no." value="${esc(m.serial_no)}"><input id="m5" placeholder="Manufacturer" value="${esc(m.manufacturer)}"><input id="m6" type="number" min="1" placeholder="Service every (days) *" value="${m.interval_days}">
+ <input id="m7" type="number" min="0" placeholder="Hours run" value="${m.hours_run}"><select id="m8">${['Operational','Under Maintenance','Breakdown','Retired'].map(x=>`<option ${m.status==x?'selected':''}>${x}</option>`).join('')}</select></div><textarea id="m9" rows="2" placeholder="Notes">${esc(m.notes)}</textarea>
+ <div><label class="muted">Machine photo (JPG/PNG)</label><br><input type="file" id="mimg" accept="image/*" onchange="pickImg(this)"> <button class="b r" type="button" onclick="curImg='';$('mprev').style.display='none';$('mimg').value=''">Remove photo</button><img id="mprev" class="big" style="${m.image?'':'display:none'}" src="${m.image||''}"></div>
+ <button class="b g" onclick="act(()=>api('${id?'/api/machines/'+id:'/api/machines'}','${id?'PUT':'POST'}',{name:val('m1'),type:val('m2'),location:val('m3'),serial_no:val('m4'),manufacturer:val('m5'),interval_days:val('m6'),hours_run:val('m7'),status:val('m8'),notes:val('m9'),image:curImg}),'Saved',()=>{closeM();render()})">Save</button>`)}
+async function serviceForm(id){const m=cache.machines.find(x=>x.id==id);if(!cache.parts.length)cache.parts=await api('/api/parts');
+ openM(`<div class="row"><h3>Log service: ${esc(m.name)}</h3><button class="b o" onclick="closeM()">Close</button></div><div class="f"><select id="s1">${['Preventive','Corrective','Inspection'].map(x=>`<option>${x}</option>`).join('')}</select><input id="s2" type="number" min="0" placeholder="Cost (₹)"><input id="s3" type="number" min="0" placeholder="Hours run now" value="${m.hours_run}"><input id="s4" placeholder="Technician" value="${esc(user.name)}">
+ <select id="s5"><option value="">No part used</option>${cache.parts.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.qty} in stock)</option>`).join('')}</select><input id="s6" type="number" min="1" placeholder="Part quantity" value="1"></div><textarea id="s7" rows="3" placeholder="What was done?"></textarea>
+ <button class="b g" onclick="act(()=>api('/api/machines/${id}/service','POST',{type:val('s1'),cost:val('s2'),hours_run:val('s3'),technician:val('s4'),part_id:val('s5'),part_qty:val('s6'),description:val('s7')}),'Service logged',()=>{cache.parts=[];closeM();render()})">Save service</button>`)}
+function resolveForm(id,d,c){openM(`<div class="row"><h3>Resolve breakdown</h3><button class="b o" onclick="closeM()">Close</button></div><p class="muted">Enter final downtime and repair cost.</p><div class="f"><input id="r1" type="number" min="0" value="${d}" placeholder="Total downtime (h)"><input id="r2" type="number" min="0" value="${c}" placeholder="Total cost (₹)"></div>
+ <button class="b g" onclick="act(()=>api('/api/breakdowns/${id}/resolve','PUT',{downtime_hours:val('r1'),cost:val('r2')}),'Marked resolved',()=>{closeM();render()})">Mark resolved</button>`)}
+async function detail(id){try{const d=await api('/api/machines/'+id),m=d.machine;
+ openM(`<div class="row"><h3>${esc(m.name)}</h3><button class="b o" onclick="closeM()">Close</button></div>${m.image?`<img class="big" src="${m.image}">`:''}<p>${tag(m.status)} ${tag(m.service)} <span class="muted">${esc(m.type)} | ${esc(m.location)} | Serial ${esc(m.serial_no)||'-'} | ${esc(m.manufacturer)||'-'}</span></p>
+ <p class="muted">Hours run: <b>${m.hours_run}</b> | Last service: <b>${m.last_service||'-'}</b> | Next: <b>${m.next_service}</b> (every ${m.interval_days} days)</p>${m.notes?`<p>${esc(m.notes)}</p>`:''}
+ <h3>Service history</h3>${d.services.map(s=>`<div class="tl"><b>${s.date}</b> ${esc(s.type)} - ${inr(s.cost)}<div class="muted">${esc(s.description)} ${s.part?'| Part: '+esc(s.part)+' x'+s.part_qty:''} | by ${esc(s.technician)}</div></div>`).join('')||'<p class="muted">No services logged.</p>'}
+ <h3>Breakdown history</h3>${d.breakdowns.map(b=>`<div class="tl"><b>${b.date}</b> ${esc(b.issue)} ${tag(b.severity)} ${tag(b.status)}<div class="muted">${b.downtime_hours} h downtime | ${inr(b.cost)}</div></div>`).join('')||'<p class="muted">No breakdowns.</p>'}`)}catch(x){toast(x.message)}}
+start();
+</script></body></html>
